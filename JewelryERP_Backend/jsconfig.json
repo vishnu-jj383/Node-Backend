@@ -1,0 +1,27 @@
+/**
+   * JavaScript Configuration (jsconfig.json)
+   * ---------------------------------------------
+   * This configuration file is used to specify settings and paths for module
+   * resolution and aliasing in your JavaScript  project.
+*/
+
+{
+    "compilerOptions": {
+      "baseUrl": ".",
+      "paths": {
+       // "@root/*": ["./"],
+        //"@controllers/*": ["./controllers/*"],
+       // "@routes/*": ["./routes/*"],
+       // "@middleware/*": ["./middleware/*"],
+       // "@models/*": ["./models/*"],
+       // "@validations/*": ["./validations/*"],
+       // "@helpers/*": ["./helpers/*"],
+       // "@seed/*": ["./seed/*"],
+       // "@locales/*": ["./locales/*"],
+       // "@utils/*": ["./utils/*"],
+        "@errorHandlers/*": ["./errorHandlers/*"],
+       // "@configuration/*": ["./configuration/*"],
+      }
+    }
+  }
+  
