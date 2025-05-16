@@ -1,3 +1,4 @@
 node_modules/
 .env
 errorHandlers/logs
+rds-ca-cert.pem

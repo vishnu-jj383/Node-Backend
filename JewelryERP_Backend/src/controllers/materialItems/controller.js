@@ -134,20 +134,20 @@ module.exports.addShapes = async (req) => {
   }
 
   // Extract shape codes to check for duplicates
-  const shapeCodes = shapes.map((s) => s.shape_code);
+  const shapeCodes = shapes.map((s) => s.material_type_id);
 
   // Check for existing records with the same shape_code
   const existingRecords = await Shape.findAll({
     where: {
-      shape_code: { [Op.in]: shapeCodes },
+      material_type_id: { [Op.in]: shapeCodes },
     },
   });
 
   // Extract existing shape codes for comparison
-  const existingShapeCodes = new Set(existingRecords.map((r) => r.shape_code));
+  const existingShapeCodes = new Set(existingRecords.map((r) => r.material_type_id));
 
   // Filter out duplicate records
-  const newShapes = shapes.filter((s) => !existingShapeCodes.has(s.shape_code));
+  const newShapes = shapes.filter((s) => !existingShapeCodes.has(s.material_type_id));
 
   if (newShapes.length === 0) {
     return {

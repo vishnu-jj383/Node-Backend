@@ -204,6 +204,67 @@ module.exports.designerReport = async () => {
         ),
         "totalRenderSelected",
       ],
+
+      [
+        Sequelize.literal(
+          `(SELECT COUNT(*) 
+            FROM "task"
+            WHERE "task"."empId" = "User"."id"
+            AND "task"."type" = 'sketch'
+            AND "task"."isApprovedCustomer" = true)`
+        ),
+        "selectedSketchesCustomer",
+      ],
+      [
+        Sequelize.literal(
+          `(SELECT COUNT(*) 
+            FROM "task"
+            WHERE "task"."empId" = "User"."id"
+            AND "task"."type" = 'sketch'
+            AND "task"."isApprovedOwn" = true)`
+        ),
+        "selectedSketchesOwn",
+      ],
+      [
+        Sequelize.literal(
+          `(SELECT COUNT(*) 
+            FROM "task"
+            WHERE "task"."empId" = "User"."id"
+            AND "task"."type" = 'cad'
+            AND "task"."isApprovedCustomer" = true)`
+        ),
+        "selectedCadsCustomer",
+      ],
+      [
+        Sequelize.literal(
+          `(SELECT COUNT(*) 
+            FROM "task"
+            WHERE "task"."empId" = "User"."id"
+            AND "task"."type" = 'cad'
+            AND "task"."isApprovedOwn" = true)`
+        ),
+        "selectedCadsOwn",
+      ],
+      [
+        Sequelize.literal(
+          `(SELECT COUNT(*) 
+            FROM "task"
+            WHERE "task"."empId" = "User"."id"
+            AND "task"."type" = 'render'
+            AND "task"."isApprovedCustomer" = true)`
+        ),
+        "selectedRendersCustomer",
+      ],
+      [
+        Sequelize.literal(
+          `(SELECT COUNT(*) 
+            FROM "task"
+            WHERE "task"."empId" = "User"."id"
+            AND "task"."type" = 'render'
+            AND "task"."isApprovedOwn" = true)`
+        ),
+        "selectedRendersOwn",
+      ],
     ],
     group: ["User.id", "Role.id"],
   });
