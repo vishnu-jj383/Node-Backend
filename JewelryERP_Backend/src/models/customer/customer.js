@@ -45,9 +45,15 @@ const Customer = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    // phone_number: {
+    //   type: DataTypes.STRING,
+    //   allowNull: true,
+    // },
     phone_number: {
       type: DataTypes.STRING,
       allowNull: true,
+      unique: true,
+    
     },
     birth_date: {
       type: DataTypes.DATEONLY,
@@ -67,7 +73,7 @@ const Customer = sequelize.define(
       defaultValue: "individual",
     },
     customer_fax: {
-      type: DataTypes.INTEGER,
+       type: DataTypes.STRING,
       allowNull: true,
     },
     customercode: {

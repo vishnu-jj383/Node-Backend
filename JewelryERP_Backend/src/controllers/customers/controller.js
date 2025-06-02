@@ -21,6 +21,7 @@ module.exports.addCustomer = async (req) => {
     customers = [customers];
   }
 
+  // Check for existing records by username, email, or phone number
   const existingRecords = await Customer.findAll({
     where: {
       [Op.or]: [
@@ -30,40 +31,82 @@ module.exports.addCustomer = async (req) => {
           },
         },
         { customer_email: { [Op.in]: customers.map((c) => c.customer_email) } },
+        { phone_number: { [Op.in]: customers.map((c) => c.phone_number).filter(Boolean) } },
       ],
     },
   });
 
-  const existingUsernames = new Set(
-    existingRecords.map((r) => r.customer_username)
-  );
+  const existingUsernames = new Set(existingRecords.map((r) => r.customer_username));
   const existingEmails = new Set(existingRecords.map((r) => r.customer_email));
+  const existingPhoneNumbers = new Set(existingRecords.map((r) => r.phone_number));
 
-  const newCustomers = customers.filter(
-    (c) =>
-      !existingUsernames.has(c.customer_username) &&
-      !existingEmails.has(c.customer_email)
-  );
+  // Track duplicates by field type
+  const duplicates = [];
+  const newCustomers = customers.filter((c) => {
+    const duplicateFields = [];
+    if (existingUsernames.has(c.customer_username)) {
+      duplicateFields.push("username");
+    }
+    if (existingEmails.has(c.customer_email)) {
+      duplicateFields.push("email");
+    }
+    if (c.phone_number && existingPhoneNumbers.has(c.phone_number)) {
+      duplicateFields.push("phone number");
+    }
+    if (duplicateFields.length > 0) {
+      duplicates.push({
+        customer: c.customer_username || c.customer_email || c.phone_number || 'unknown',
+        fields: duplicateFields,
+      });
+      return false;
+    }
+    return true;
+  });
 
   if (newCustomers.length === 0) {
+    const message = duplicates.map(d => 
+      `This ${d.fields.join(', ')} is duplicated for customer ${d.customer}`
+    ).join('; ');
     return {
       status: statusCodes.CONFLICT,
-      data: { message: "All customers already exist!" },
+      data: { message: message || "All customers have duplicate fields!" },
     };
   }
 
-  const insertedData = await Customer.bulkCreate(newCustomers, {
-    validate: true,
-    ignoreDuplicates: true,
-  });
+  try {
+    const insertedData = await Customer.bulkCreate(newCustomers, {
+      validate: true,
+    });
 
-  return {
-    status: statusCodes.SUCCESS,
-    data: {
-      message: "Customer(s) created successfully",
-      data: insertedData,
-    },
-  };
+    return {
+      status: statusCodes.SUCCESS,
+      data: {
+        message: "Customer(s) created successfully",
+        data: insertedData,
+      },
+    };
+  } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      const field = error.errors[0]?.path || 'unknown field';
+      let fieldName = field;
+      if (field === 'customer_username') fieldName = 'username';
+      if (field === 'customer_email') fieldName = 'email';
+      if (field === 'phone_number') fieldName = 'phone number';
+      return {
+        status: statusCodes.CONFLICT,
+        data: {
+          message: `This ${fieldName} is duplicated.`,
+        },
+      };
+    }
+    return {
+      status: statusCodes.INTERNAL_SERVER_ERROR,
+      data: {
+        message: "An error occurred while creating the customer(s).",
+        error: error.message,
+      },
+    };
+  }
 };
 
 module.exports.getAllCustomers = async () => {

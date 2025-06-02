@@ -176,7 +176,7 @@ module.exports.addShapes = async (req) => {
 module.exports.getAllShapes = async () => {
   // Fetch all shapes from the database, including related material type
   const shapes = await Shape.findAll({
-    attributes: ["id", "shape_name", "netsuite_id"],
+    attributes: ["id", "shape_name", "netsuite_id","material_type_id"],
     include: [
       {
         model: MaterialType,

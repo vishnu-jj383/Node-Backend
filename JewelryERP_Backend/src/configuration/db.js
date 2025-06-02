@@ -10,7 +10,7 @@ const sequelize = new Sequelize(process.env.DB_CONNECTION, {
     min: 2,   // Keep a minimum
     acquire: 20000, // Lower acquisition timeout
     idle: 5000, // Close idle connections quickly
-  },
+  }, 
 });
 
 const connectDB = async () => {
