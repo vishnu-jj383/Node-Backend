@@ -29,6 +29,94 @@ const client = new twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUT
 
 //#region modules
 
+module.exports.orderProductTypeReport = async (req) => {
+  try {
+    // Log request for debugging
+    console.log("Received request:", { body: req?.body, query: req?.query });
+
+    // Safely access reportType
+    if (!req) {
+      throw Object.assign(new Error("Request object is undefined"), { status: statusCodes.BAD_REQUEST });
+    }
+    const reportType = (req.body && req.body.reportType) || (req.query && req.query.reportType) || "weekly";
+    if (!["weekly", "monthly"].includes(reportType.toLowerCase())) {
+      throw Object.assign(new Error("Invalid report type. Use 'weekly' or 'monthly'."), { status: statusCodes.BAD_REQUEST });
+    }
+
+    const isWeekly = reportType.toLowerCase() === "weekly";
+    const dateFormat = isWeekly ? 'YYYY-WW' : 'YYYY-MM';
+    const dateGroup = fn('TO_CHAR', col('orderDate'), dateFormat);
+
+    const orders = await Order.findAll({
+      attributes: [
+        [col("diamondRange"), "diamondRange"],
+        [col("ProductType.product_types"), "productType"],
+        [dateGroup, "period"],
+        [fn("COUNT", col("Order.id")), "count"],
+      ],
+      include: [
+        {
+          model: ProductType,
+          attributes: [],
+          required: true,
+        },
+      ],
+      where: {
+        diamondRange: { [Op.ne]: null },
+        orderDate: { [Op.ne]: null },
+        productTypeId: { [Op.ne]: null },
+      },
+      group: [
+        col("diamondRange"),
+        col("ProductType.product_types"),
+        dateGroup,
+      ],
+      order: [
+        [col("period"), "ASC"],
+        [col("diamondRange"), "ASC"],
+        [col("productType"), "ASC"],
+      ],
+      raw: true,
+    });
+
+    const reportData = {};
+    orders.forEach((order) => {
+      const { period, diamondRange, productType, count } = order;
+      if (!reportData[period]) {
+        reportData[period] = {};
+      }
+      if (!reportData[period][diamondRange]) {
+        reportData[period][diamondRange] = {
+          productTypes: {},
+          totalCount: 0,
+        };
+      }
+      reportData[period][diamondRange].productTypes[productType] = parseInt(count, 10);
+      reportData[period][diamondRange].totalCount += parseInt(count, 10);
+    });
+
+    const formattedData = Object.keys(reportData).map((period) => ({
+      period: isWeekly ? `Week ${period.split("-")[1]} of ${period.split("-")[0]}` : period,
+      diamondRanges: Object.keys(reportData[period]).map((range) => ({
+        diamondRange: range,
+        productTypes: reportData[period][range].productTypes,
+        totalCount: reportData[period][range].totalCount,
+      })),
+    }));
+
+    return {
+      status: statusCodes.SUCCESS,
+      data: {
+        message: `${isWeekly ? "Weekly" : "Monthly"} order report by product type and diamond range fetched successfully`,
+        data: formattedData,
+      },
+    };
+  } catch (error) {
+    console.error("Error in orderProductTypeReport:", error);
+    throw Object.assign(new Error(`Failed to generate order report: ${error.message}`), { status: statusCodes.INTERNAL_SERVER_ERROR });
+  }
+};
+
 module.exports.getAllDesigns = async (req) => {
   let { page = 1, limit = 10, type } = req.body;
 
@@ -130,6 +218,8 @@ module.exports.getAllDesigns = async (req) => {
     },
   };
 };
+
+
 
 module.exports.designerReport = async () => {
   const users = await User.findAll({
@@ -1435,4 +1525,9 @@ module.exports.updateManufactured = async (id,isManufactured) => {
     },
   };
 };
+
+
+
+
+
 //#endregion

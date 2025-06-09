@@ -11,6 +11,8 @@ designRouter.post("/getAllDesign",catchErrors(designController.getAllDesigns));
 
 designRouter.post("/designerReport",catchErrors(designController.designerReport));
 
+designRouter.post("/orderProductTypeReport", catchErrors(designController.orderProductTypeReport));
+
 designRouter.get("/designToCustomer",catchErrors(designController.designToCustomer));
 
 designRouter.get("/getDesignById/:id",catchErrors(designController.getDesignById));

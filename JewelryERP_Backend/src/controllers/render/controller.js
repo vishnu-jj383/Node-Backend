@@ -244,7 +244,7 @@ module.exports.getAllRenders = async (page = 1, limit = 10) => {
       {
         model: Sketch,
         attributes: ["id", "sketchNo"],
-        required: true,
+        required: false,
       },
       {
         model: Task,

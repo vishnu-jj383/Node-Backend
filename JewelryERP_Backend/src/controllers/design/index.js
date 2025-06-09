@@ -82,4 +82,16 @@ module.exports.updateManufactured = async (req, res) => {
   let result = await designService.updateManufactured(req.body.designId,req.body.isManufactured);
   res.status(result.status).send(result.data);
 };
+
+// module.exports.orderProductTypeReport = async (req, res) => {
+//   let reportType = req.query.reportType || req.body.reportType || "weekly"; // Default to weekly
+//   let result = await designService.orderProductTypeReport(reportType);
+//   res.status(result.status).send(result.data);
+// };
+module.exports.
+  orderProductTypeReport= async (req, res) => {
+    const result = await designService.orderProductTypeReport(req);
+    res.status(result.status).send(result.data);
+  }
+
 //#endregion
