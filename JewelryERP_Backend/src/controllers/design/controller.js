@@ -1793,9 +1793,9 @@ module.exports.updateManufactured = async (id,isManufactured) => {
     },
   };
 };
-
-
-
-
-
 //#endregionf
+
+
+
+
+
