@@ -94,4 +94,32 @@ module.exports.
     res.status(result.status).send(result.data);
   }
 
+ module.exports.totalDesignCountReport = async (req, res) => {
+  try {
+    const result = await designService.totalDesignCountReport(req);
+    
+    // Validate result
+    if (!result || typeof result.status !== 'number') {
+      throw new Error('Invalid response from service');
+    }
+
+    // Handle success or error response
+    if (result.status === 200) {
+      res.status(result.status).json(result.data);
+    } else {
+      res.status(result.status).json({
+        message: result.message || 'An error occurred',
+        stack: result.stack,
+      });
+    }
+  } catch (error) {
+    console.error('Error in totalDesignCountReport controller:', error);
+    res.status(500).json({
+      status: 500,
+      message: error.message || 'Internal server error',
+      stack: error.stack,
+    });
+  }
+};
+
 //#endregion

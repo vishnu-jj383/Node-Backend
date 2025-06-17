@@ -120,7 +120,6 @@ module.exports.getAllMaterialTypes = async () => {
 module.exports.addShapes = async (req) => {
   let shapes = req.body;
 
-  // Ensure the request contains data
   if (!shapes || (Array.isArray(shapes) && shapes.length === 0)) {
     return {
       status: statusCodes.NOTACCEPTABLE,
@@ -128,40 +127,55 @@ module.exports.addShapes = async (req) => {
     };
   }
 
-  // Convert single object to array for consistency
   if (!Array.isArray(shapes)) {
     shapes = [shapes];
   }
 
-  // Extract shape codes to check for duplicates
-  const shapeCodes = shapes.map((s) => s.material_type_id);
+  // Validate material_type_id against MaterialType
+  const materialTypeIds = shapes
+    .map((s) => s.material_type_id)
+    .filter((id) => id !== null && id !== undefined); // Exclude null/undefined
+  let validMaterialTypeIds = new Set();
+  if (materialTypeIds.length > 0) {
+    const validMaterialTypes = await MaterialType.findAll({
+      where: { id: { [Op.in]: materialTypeIds } },
+      attributes: ["id"],
+      raw: true,
+    });
+    validMaterialTypeIds = new Set(validMaterialTypes.map((mt) => mt.id));
+  }
 
-  // Check for existing records with the same shape_code
+  const shapeCodes = shapes.map((s) => s.material_type_id);
   const existingRecords = await Shape.findAll({
     where: {
-      material_type_id: { [Op.in]: shapeCodes },
+      material_type_id: { [Op.in]: shapeCodes.filter((id) => id !== null) },
     },
   });
-
-  // Extract existing shape codes for comparison
   const existingShapeCodes = new Set(existingRecords.map((r) => r.material_type_id));
 
-  // Filter out duplicate records
-  const newShapes = shapes.filter((s) => !existingShapeCodes.has(s.material_type_id));
+  const newShapes = shapes.filter((s) => {
+    // Allow null material_type_id if intended, otherwise validate
+    if (s.material_type_id === null || s.material_type_id === undefined) {
+      return !existingShapeCodes.has(null); // Handle null case if needed
+    }
+    return (
+      validMaterialTypeIds.has(s.material_type_id) &&
+      !existingShapeCodes.has(s.material_type_id)
+    );
+  });
 
   if (newShapes.length === 0) {
     return {
       status: statusCodes.CONFLICT,
       data: {
-        message: "All shapes already exist!",
+        message: "All shapes already exist or have invalid material_type_id!",
       },
     };
   }
 
-  // Bulk insert the shapes into the database
   const insertedData = await Shape.bulkCreate(newShapes, {
-    validate: true, // Ensures validation before insertion
-    ignoreDuplicates: true, // Prevents duplicate inserts if constraints exist
+    validate: true,
+    ignoreDuplicates: true,
   });
 
   return {
@@ -174,21 +188,19 @@ module.exports.addShapes = async (req) => {
 };
 
 module.exports.getAllShapes = async () => {
-  // Fetch all shapes from the database, including related material type
   const shapes = await Shape.findAll({
-    attributes: ["id", "shape_name", "netsuite_id","material_type_id"],
+    attributes: ["id", "shape_name", "netsuite_id", "material_type_id"],
     include: [
       {
         model: MaterialType,
         attributes: ["material_class"],
-        as: "materialType", // Ensure alias matches your model associations
+        as: "materialType",
       },
     ],
-    raw: true, // Flatten the response
-    nest: true, // Ensures nesting for included models
+    raw: true,
+    nest: true,
   });
 
-  // Check if data exists
   if (shapes.length === 0) {
     return {
       status: statusCodes.NOTFOUND,
@@ -199,16 +211,14 @@ module.exports.getAllShapes = async () => {
     };
   }
 
-  // Flatten materialType field for better response formatting
   const formattedShapes = shapes.map((shape) => ({
     id: shape.id,
-    shape_code: shape.shape_code,
+    material_type_id: shape.material_type_id, // Fixed from shape_code
     shape_name: shape.shape_name,
     netsuite_id: shape.netsuite_id,
-    material_class: shape.materialType?.material_class || null, // Extract material class
+    material_class: shape.materialType?.material_class || null,
   }));
 
-  // Return the fetched shapes
   return {
     status: statusCodes.SUCCESS,
     data: {
@@ -1433,8 +1443,19 @@ module.exports.addSieve = async (req) => {
     sieves = [sieves];
   }
 
+  // Normalize stoneWeight field name
+  sieves = sieves.map((s) => ({
+    ...s,
+    stoneWeight: s.stoneWeight ?? s.stoneweight, // Use stoneWeight if available, else stoneweight
+  }));
+
+  // Log input data
+  console.log("Input sieves:", JSON.stringify(sieves, null, 2));
+
   // Validate diamondStoneSizeId existence
-  const stoneSizeIds = sieves.map((s) => s.diamondStoneSizeId);
+  const stoneSizeIds = sieves
+    .map((s) => s.diamondStoneSizeId)
+    .filter((id) => id !== null && id !== undefined);
   const existingStoneSizes = await DiamondStoneSize.findAll({
     where: { id: { [Op.in]: stoneSizeIds } },
     attributes: ["id"],
@@ -1442,8 +1463,6 @@ module.exports.addSieve = async (req) => {
 
   const validStoneSizeIds = new Set(existingStoneSizes.map((s) => s.id));
   const invalidSieves = sieves.filter((s) => !validStoneSizeIds.has(s.diamondStoneSizeId));
-  console.log(invalidSieves)
-
   if (invalidSieves.length > 0) {
     return {
       status: statusCodes.NOTFOUND,
@@ -1454,44 +1473,88 @@ module.exports.addSieve = async (req) => {
     };
   }
 
+  // Validate sieveSize and stoneWeight
+  const isValidSieveSize = (sieveSize) =>
+    sieveSize != null && typeof sieveSize === "string" && sieveSize.trim() !== "";
+  const isValidStoneWeight = (stoneWeight) => {
+    if (stoneWeight == null) return false;
+    const num = typeof stoneWeight === "string" ? parseFloat(stoneWeight) : stoneWeight;
+    return typeof num === "number" && !isNaN(num);
+  };
+
   // Check for duplicates
   const existingSieves = await Sieve.findAll({
     where: {
       [Op.or]: sieves.map((s) => ({
         diamondStoneSizeId: s.diamondStoneSizeId,
-        sieveSize: s.sieveSize,
+        sieveSize: String(s.sieveSize),
       })),
     },
   });
 
   const existingEntries = new Set(
-    existingSieves.map((s) => `${s.diamondStoneSizeId}-${s.sieveSize}`)
+    existingSieves.map((s) => `${s.diamondStoneSizeId}-${String(s.sieveSize)}`)
   );
 
-  const newSieves = sieves.filter(
-    (s) => !existingEntries.has(`${s.diamondStoneSizeId}-${s.sieveSize}`)
-  );
+  const newSieves = sieves.filter((s) => {
+    const key = `${s.diamondStoneSizeId}-${String(s.sieveSize)}`;
+    if (!isValidSieveSize(s.sieveSize) || !isValidStoneWeight(s.stoneWeight)) {
+      console.warn(`Invalid sieve data: ${JSON.stringify(s)}`);
+      return false;
+    }
+    if (existingEntries.has(key)) {
+      console.warn(`Duplicate sieve: ${key}`);
+      return false;
+    }
+    return true;
+  });
 
   if (newSieves.length === 0) {
     return {
       status: statusCodes.CONFLICT,
       data: {
-        message: "All sieve records already exist!",
+        message: "All sieve records already exist or have invalid data!",
       },
     };
   }
 
-  const insertedData = await Sieve.bulkCreate(newSieves, {
-    validate: true,
-  });
-
-  return {
-    status: statusCodes.SUCCESS,
-    data: {
-      message: "Sieve(s) created successfully",
-      data: insertedData,
-    },
-  };
+  try {
+    const insertedData = await Sieve.bulkCreate(newSieves, {
+      validate: true,
+    });
+    return {
+      status: statusCodes.SUCCESS,
+      data: {
+        message: "Sieve(s) created successfully",
+        data: insertedData,
+      },
+    };
+  } catch (error) {
+    if (error.name === "AggregateError") {
+      const errorMessages = error.errors.map((err) => ({
+        record: err.record,
+        errors: err.errors.map((e) => ({
+          field: e.path,
+          message: e.message,
+          value: e.value,
+        })),
+      }));
+      return {
+        status: statusCodes.BADREQUEST,
+        data: {
+          message: "Validation errors occurred during sieve creation",
+          errors: errorMessages,
+        },
+      };
+    }
+    return {
+      status: statusCodes.SERVERERROR,
+      data: {
+        message: "An error occurred while creating sieves",
+        error: error.message,
+      },
+    };
+  }
 };
 
 module.exports.getSieveByDiamondStoneSizeId = async (diamondStoneSizeId) => {

@@ -441,7 +441,8 @@ module.exports.getRenderById = async (renderId) => {
       {
         model: Sketch,
         attributes: ["id", "sketchNo"],
-        required: true,
+        required: false,
+        // required: true,
       },
       {
         model: Task,

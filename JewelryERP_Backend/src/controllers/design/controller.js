@@ -5,6 +5,8 @@ const Design = require("../../models/design/design");
 const Order = require("../../models/order/order");
 const Category = require("../../models/category/category");
 const Subcategory = require("../../models/subcategory/subcategory");
+
+const CategoryGroup=require("../../models/categoryGoup/categoryGroup")
 const ProductType = require("../../models/misc/productTypes");
 const Brand = require("../../models/misc/brands");
 const MetalType = require("../../models/materialItems/metalType");
@@ -25,33 +27,234 @@ const Album = require("../../models/album/albums");
 const CustomerDesignUpdate = require("../../models/customerDesignUpdate/customerDesignUpdate");
 const twilio = require("twilio");
 const client = new twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+
 //#endregion
 
 //#region modules
 
+
+
+module.exports.totalDesignCountReport = async (req) => {
+  try {
+    const orders = await Order.findAll({
+      where: {
+        orderStatus: 'design',
+      },
+      attributes: [
+        'diamondRange',
+        [Sequelize.fn('COUNT', Sequelize.col('Order.id')), 'design_count'],
+      ],
+      include: [
+        {
+          model: Subcategory,
+          attributes: ['id', 'subcategory_name'],
+          required: true,
+          include: [
+            {
+              model: Category,
+              as: 'category', // Assumed alias; confirm with Subcategory model
+              attributes: ['id', 'category_name'],
+              required: true,
+              include: [
+                {
+                  model: CategoryGroup,
+                  as: 'categoryGroup', // Assumed alias; confirm with Category model
+                  attributes: ['id', 'category_group_name'],
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      group: [
+        'Subcategory.id',
+        'Subcategory.subcategory_name',
+        'Subcategory.category.id',
+        'Subcategory.category.category_name',
+        'Subcategory.category.categoryGroup.id',
+        'Subcategory.category.categoryGroup.category_group_name',
+        'Order.diamondRange', // Group by diamondRange for correct counting
+      ],
+      raw: true,
+    });
+
+    // Log raw query result for debugging
+    console.log('Raw query result:', JSON.stringify(orders, null, 2));
+
+    // Process data into hierarchical structure
+    const reportData = orders.reduce((acc, row) => {
+      const categoryGroup = row['Subcategory.category.categoryGroup.category_group_name'];
+      const category = row['Subcategory.category.category_name'];
+      const subcategory = row['Subcategory.subcategory_name'];
+      const diamondRange = parseFloat(row['diamondRange']) || 0; // Parse STRING to number
+      const count = parseInt(row['design_count']) || 0;
+
+      if (!categoryGroup || !category || !subcategory) {
+        return acc; // Skip invalid rows
+      }
+
+      if (!acc[categoryGroup]) acc[categoryGroup] = {};
+      if (!acc[categoryGroup][category]) acc[categoryGroup][category] = {};
+      if (!acc[categoryGroup][category][subcategory]) {
+        acc[categoryGroup][category][subcategory] = {
+          'Below 0.50': 0,
+          '0.5-0.7': 0,
+          '0.7-1': 0,
+          '1-1.5': 0,
+          '1.5-2': 0,
+          '2-2.5': 0,
+          'Above 2.5': 0,
+        };
+      }
+
+      let rangeKey = 'Above 2.5';
+      if (diamondRange < 0.5) rangeKey = 'Below 0.50';
+      else if (diamondRange >= 0.5 && diamondRange < 1) {
+        rangeKey = '0.5-1';
+        acc[categoryGroup][category][subcategory]['0.5-0.7'] += diamondRange >= 0.5 && diamondRange < 0.7 ? count : 0;
+        acc[categoryGroup][category][subcategory]['0.7-1'] += diamondRange >= 0.7 && diamondRange < 1 ? count : 0;
+      } else if (diamondRange >= 1 && diamondRange < 1.5) rangeKey = '1-1.5';
+      else if (diamondRange >= 1.5 && diamondRange < 2) rangeKey = '1.5-2';
+      else if (diamondRange >= 2 && diamondRange <= 2.5) rangeKey = '2-2.5';
+
+      acc[categoryGroup][category][subcategory][rangeKey] += count;
+
+      return acc;
+    }, {});
+
+    // Calculate totals
+    let totalOrderCount = 0;
+    let totalCounts = {
+      'Below 0.50': 0,
+      '0.5-0.7': 0,
+      '0.7-1': 0,
+      '1-1.5': 0,
+      '1.5-2': 0,
+      '2-2.5': 0,
+      'Above 2.5': 0,
+    };
+
+    for (const cg in reportData) {
+      for (const cat in reportData[cg]) {
+        for (const subcat in reportData[cg][cat]) {
+          for (const range in reportData[cg][cat][subcat]) {
+            const count = reportData[cg][cat][subcat][range];
+            totalCounts[range] += count;
+            totalOrderCount += count; // Sum all counts for totalOrderCount
+          }
+        }
+      }
+    }
+
+    return {
+      status: 200,
+      data: {
+        reportData,
+        totalOrderCount, // Total sum of counts (e.g., 10)
+        totalCounts, // Counts per range (e.g., { "Below 0.50": 1, "0.5-0.7": 3, ... })
+      },
+    };
+  } catch (error) {
+    console.error('Error in totalDesignCountReport service:', error);
+    return {
+      status: 500,
+      message: error.message || 'Internal server error',
+      stack: error.stack,
+    };
+  }
+};
 module.exports.orderProductTypeReport = async (req) => {
   try {
     // Log request for debugging
     console.log("Received request:", { body: req?.body, query: req?.query });
 
-    // Safely access reportType
+    // Safely access inputs
     if (!req) {
       throw Object.assign(new Error("Request object is undefined"), { status: statusCodes.BAD_REQUEST });
     }
-    const reportType = (req.body && req.body.reportType) || (req.query && req.query.reportType) || "weekly";
-    if (!["weekly", "monthly"].includes(reportType.toLowerCase())) {
-      throw Object.assign(new Error("Invalid report type. Use 'weekly' or 'monthly'."), { status: statusCodes.BAD_REQUEST });
-    }
 
-    const isWeekly = reportType.toLowerCase() === "weekly";
-    const dateFormat = isWeekly ? 'YYYY-WW' : 'YYYY-MM';
-    const dateGroup = fn('TO_CHAR', col('orderDate'), dateFormat);
+    const { startDate, endDate, month } = req.body || req.query || {};
+
+    // Predefined diamond ranges for output
+    const validDiamondRanges = [
+      "below 0.07",
+      "0.07-0.10",
+      "0.10-0.15",
+      "0.15-0.30",
+      "0.30-0.50",
+      "0.50-1.0",
+      "1.0-1.5",
+      "1.5-2.0",
+      "2.0-2.5",
+      "above 2.5",
+    ];
+
+    // Function to map diamondRange to predefined ranges
+    const mapDiamondRange = (range) => {
+      if (!range || typeof range !== "string") return "Unknown";
+      const value = parseFloat(range);
+      if (isNaN(value)) {
+        if (validDiamondRanges.includes(range)) return range;
+        return "Unknown";
+      }
+      if (value < 0.07) return "below 0.07";
+      if (value <= 0.10) return "0.07-0.10";
+      if (value <= 0.15) return "0.10-0.15";
+      if (value <= 0.30) return "0.15-0.30";
+      if (value <= 0.50) return "0.30-0.50";
+      if (value <= 1.0) return "0.50-1.0";
+      if (value <= 1.5) return "1.0-1.5";
+      if (value <= 2.0) return "1.5-2.0";
+      if (value <= 2.5) return "2.0-2.5";
+      return "above 2.5";
+    };
+
+    // Validate and process date inputs
+    let dateFilter = {};
+    let periodLabel = "";
+    let periodFormat = "";
+
+    if (month) {
+      if (!moment(month, "YYYY-MM", true).isValid()) {
+        throw Object.assign(new Error("Invalid month format. Use 'YYYY-MM'."), { status: statusCodes.BAD_REQUEST });
+      }
+      const startOfMonth = moment(month, "YYYY-MM").startOf("month").toDate();
+      const endOfMonth = moment(month, "YYYY-MM").endOf("month").toDate();
+      dateFilter = {
+        [Op.gte]: startOfMonth,
+        [Op.lte]: endOfMonth,
+      };
+      periodLabel = `Month ${month}`;
+      periodFormat = month;
+    } else if (startDate && endDate) {
+      if (!moment(startDate, "YYYY-MM-DD", true).isValid() || !moment(endDate, "YYYY-MM-DD", true).isValid()) {
+        throw Object.assign(new Error("Invalid date format. Use 'YYYY-MM-DD'."), { status: statusCodes.BAD_REQUEST });
+      }
+      if (moment(endDate).isBefore(moment(startDate), "day")) {
+        throw Object.assign(new Error("endDate must be on or after startDate."), { status: statusCodes.BAD_REQUEST });
+      }
+      const start = moment(startDate, "YYYY-MM-DD").startOf("day").toDate();
+      const end = moment(endDate, "YYYY-MM-DD").isSame(moment(startDate, "YYYY-MM-DD"), "day")
+        ? moment(endDate, "YYYY-MM-DD").endOf("day").toDate()
+        : moment(endDate, "YYYY-MM-DD").endOf("day").toDate();
+      dateFilter = {
+        [Op.gte]: start,
+        [Op.lte]: end,
+      };
+      periodLabel = `${startDate} to ${endDate}`;
+      periodFormat = `${startDate}_${endDate}`;
+    } else {
+      throw Object.assign(new Error("Provide either 'month' or both 'startDate' and 'endDate'."), {
+        status: statusCodes.BAD_REQUEST,
+      });
+    }
 
     const orders = await Order.findAll({
       attributes: [
         [col("diamondRange"), "diamondRange"],
         [col("ProductType.product_types"), "productType"],
-        [dateGroup, "period"],
         [fn("COUNT", col("Order.id")), "count"],
       ],
       include: [
@@ -60,63 +263,96 @@ module.exports.orderProductTypeReport = async (req) => {
           attributes: [],
           required: true,
         },
+        {
+          model: Cad,
+          attributes: [],
+          required: true,
+          where: {
+            cadStatus: "render",
+            renderStartDate: {
+              [Op.ne]: null,
+              ...dateFilter,
+            },
+          },
+        },
       ],
       where: {
         diamondRange: { [Op.ne]: null },
-        orderDate: { [Op.ne]: null },
         productTypeId: { [Op.ne]: null },
       },
       group: [
         col("diamondRange"),
         col("ProductType.product_types"),
-        dateGroup,
       ],
       order: [
-        [col("period"), "ASC"],
         [col("diamondRange"), "ASC"],
         [col("productType"), "ASC"],
       ],
       raw: true,
     });
 
+    // Log orders for debugging
+    console.log("Fetched orders:", orders);
+
     const reportData = {};
+    const periodKey = periodFormat;
+    reportData[periodKey] = {};
+
+    // Process orders with mapped diamond ranges
     orders.forEach((order) => {
-      const { period, diamondRange, productType, count } = order;
-      if (!reportData[period]) {
-        reportData[period] = {};
-      }
-      if (!reportData[period][diamondRange]) {
-        reportData[period][diamondRange] = {
+      const mappedRange = mapDiamondRange(order.diamondRange);
+      const { productType, count } = order;
+      console.log(`Mapping diamondRange: ${order.diamondRange} -> ${mappedRange}, productType: ${productType}, count: ${count}`);
+      if (!reportData[periodKey][mappedRange]) {
+        reportData[periodKey][mappedRange] = {
           productTypes: {},
           totalCount: 0,
         };
       }
-      reportData[period][diamondRange].productTypes[productType] = parseInt(count, 10);
-      reportData[period][diamondRange].totalCount += parseInt(count, 10);
+      reportData[periodKey][mappedRange].productTypes[productType] =
+        (reportData[periodKey][mappedRange].productTypes[productType] || 0) + parseInt(count, 10);
+      reportData[periodKey][mappedRange].totalCount += parseInt(count, 10);
     });
 
-    const formattedData = Object.keys(reportData).map((period) => ({
-      period: isWeekly ? `Week ${period.split("-")[1]} of ${period.split("-")[0]}` : period,
-      diamondRanges: Object.keys(reportData[period]).map((range) => ({
-        diamondRange: range,
-        productTypes: reportData[period][range].productTypes,
-        totalCount: reportData[period][range].totalCount,
-      })),
-    }));
+    // Ensure all valid diamond ranges appear in the output, even if no data
+    validDiamondRanges.forEach((range) => {
+      if (!reportData[periodKey][range]) {
+        reportData[periodKey][range] = {
+          productTypes: {},
+          totalCount: 0,
+        };
+      }
+    });
+
+    const formattedData = [{
+      period: periodLabel,
+      diamondRanges: Object.keys(reportData[periodKey])
+        .sort((a, b) => {
+          const indexA = validDiamondRanges.indexOf(a) !== -1 ? validDiamondRanges.indexOf(a) : validDiamondRanges.length;
+          const indexB = validDiamondRanges.indexOf(b) !== -1 ? validDiamondRanges.indexOf(b) : validDiamondRanges.length;
+          return indexA - indexB;
+        })
+        .map((range) => ({
+          diamondRange: range,
+          productTypes: reportData[periodKey][range].productTypes,
+          totalCount: reportData[periodKey][range].totalCount,
+        })),
+    }];
 
     return {
       status: statusCodes.SUCCESS,
       data: {
-        message: `${isWeekly ? "Weekly" : "Monthly"} order report by product type and diamond range fetched successfully`,
+        message: `Order report by product type and diamond range for ${periodLabel} fetched successfully`,
         data: formattedData,
       },
     };
   } catch (error) {
     console.error("Error in orderProductTypeReport:", error);
-    throw Object.assign(new Error(`Failed to generate order report: ${error.message}`), { status: statusCodes.INTERNAL_SERVER_ERROR });
+    throw Object.assign(new Error(`Failed to generate order report: ${error.message}`), {
+      status: statusCodes.INTERNAL_SERVER_ERROR,
+    });
   }
 };
-
 module.exports.getAllDesigns = async (req) => {
   let { page = 1, limit = 10, type } = req.body;
 
@@ -221,8 +457,13 @@ module.exports.getAllDesigns = async (req) => {
 
 
 
-module.exports.designerReport = async () => {
-  const users = await User.findAll({
+module.exports.designerReport = async (payload) => {
+  const page = payload.page || 1;
+  const pageSize = payload.pageSize || 30;
+  const offset = (page - 1) * pageSize;
+  const limit = pageSize;
+
+  const result = await User.findAndCountAll({
     include: [
       {
         model: Role,
@@ -272,7 +513,7 @@ module.exports.designerReport = async () => {
           `(SELECT COALESCE(CAST(SUM(T."selectedCount") AS INTEGER), 0) 
             FROM "task" T 
             WHERE T."empId" = "User"."id"
-            AND T."type" = 'cad')`
+              AND T."type" = 'cad')`
         ),
         "totalCadSelected",
       ],
@@ -290,11 +531,10 @@ module.exports.designerReport = async () => {
           `(SELECT COALESCE(CAST(SUM(T."selectedCount") AS INTEGER), 0) 
             FROM "task" T 
             WHERE T."empId" = "User"."id"
-            AND T."type" = 'render')`
+              AND T."type" = 'render')`
         ),
         "totalRenderSelected",
       ],
-
       [
         Sequelize.literal(
           `(SELECT COUNT(*) 
@@ -357,13 +597,41 @@ module.exports.designerReport = async () => {
       ],
     ],
     group: ["User.id", "Role.id"],
+    limit,
+    offset,
+    distinct: true,
   });
 
   return {
     status: statusCodes.SUCCESS,
     data: {
       message: "Users with task counts fetched successfully",
-      data: users,
+      totalCount: result.count.length || result.count, // Handle grouped count
+      currentPage: page,
+      totalPages: Math.ceil((result.count.length || result.count) / pageSize),
+      data: result.rows.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        designation: user.designation,
+        role: user.Role ? {
+          id: user.Role.id,
+          roleName: user.Role.roleName,
+          type: user.Role.type,
+        } : null,
+        totalSketchRequired: user.dataValues.totalSketchRequired,
+        totalSketchSelected: user.dataValues.totalSketchSelected,
+        totalCadRequired: user.dataValues.totalCadRequired,
+        totalCadSelected: user.dataValues.totalCadSelected,
+        totalRenderRequired: user.dataValues.totalRenderRequired,
+        totalRenderSelected: user.dataValues.totalRenderSelected,
+        selectedSketchesCustomer: user.dataValues.selectedSketchesCustomer,
+        selectedSketchesOwn: user.dataValues.selectedSketchesOwn,
+        selectedCadsCustomer: user.dataValues.selectedCadsCustomer,
+        selectedCadsOwn: user.dataValues.selectedCadsOwn,
+        selectedRendersCustomer: user.dataValues.selectedRendersCustomer,
+        selectedRendersOwn: user.dataValues.selectedRendersOwn,
+      })),
     },
   };
 };

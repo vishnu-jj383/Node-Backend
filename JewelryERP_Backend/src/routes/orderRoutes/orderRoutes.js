@@ -8,6 +8,7 @@ const orderValidation=require('../../validations/order/orderValidation')
 
 //#region routing
 
+
 orderRouter.post("/createOrder",validate(orderValidation.createOrderValidation),catchErrors(orderController.createOrder));
 
 orderRouter.put("/updateOrderStatus",catchErrors(orderController.updateOrderStatus));

@@ -25,9 +25,12 @@ const {
   checkFileType,
 } = require("../../Helper/fileUpload/extractExtension");
 const User = require("../../models/auth/userModel");
+
+const validator = require('validator'); // Add validator
 //#endregion
 
 //#region modules
+
 
 module.exports.createOrder = async (orderData) => {
   // Attempt to create the order

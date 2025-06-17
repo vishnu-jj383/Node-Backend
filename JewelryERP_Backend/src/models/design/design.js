@@ -77,6 +77,7 @@ const Design = sequelize.define(
       defaultValue: false,
     },
   },
+ 
   {
     tableName: "Design",
     timestamps: true,

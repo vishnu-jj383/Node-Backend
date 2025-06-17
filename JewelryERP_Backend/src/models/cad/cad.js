@@ -53,6 +53,11 @@ const Cad = sequelize.define("Cad", {
     type: DataTypes.DATE,
     allowNull: true,
   },
+  renderStartDate: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: "Stores the date when cadStatus changes to render",
+  },
   specialInstruction: {
     type: DataTypes.STRING,
     allowNull: true,
@@ -68,26 +73,35 @@ const Cad = sequelize.define("Cad", {
     defaultValue: "Pending",
   },
   cadStatus: {
-    type: DataTypes.ENUM("cad","render","design"),
+    type: DataTypes.ENUM("cad", "render", "design"),
     defaultValue: "cad",
   },
-  reason:{
+  reason: {
     type: DataTypes.STRING,
   }
 });
 
 // **Auto-generate cadId (CAD100, CAD101, ...)**
 Cad.beforeValidate(async (cad) => {
-  const lastCad = await Cad.findOne({
-    order: [["cadNo", "DESC"]],
-  });
+  if (!cad.cadNo) {
+    const lastCad = await Cad.findOne({
+      order: [["cadNo", "DESC"]],
+    });
 
-  let newId = "CAD100"; // Default if no records exist
-  if (lastCad && lastCad.cadNo) {
-    const lastNumber = parseInt(lastCad.cadNo.replace("CAD", ""), 10);
-    newId = `CAD${lastNumber + 1}`;
+    let newId = "CAD100"; // Default if no records exist
+    if (lastCad && lastCad.cadNo) {
+      const lastNumber = parseInt(lastCad.cadNo.replace("CAD", ""), 10);
+      newId = `CAD${lastNumber + 1}`;
+    }
+    cad.cadNo = newId;
   }
-  cad.cadNo = newId;
+});
+
+// **Set renderStartDate when cadStatus changes to render**
+Cad.beforeUpdate(async (cad, options) => {
+  if (cad.changed('cadStatus') && cad.cadStatus === 'render') {
+    cad.renderStartDate = new Date();
+  }
 });
 
 Cad.belongsTo(Order, { foreignKey: "orderId" });

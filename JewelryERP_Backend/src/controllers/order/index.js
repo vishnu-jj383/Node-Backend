@@ -62,4 +62,6 @@ module.exports.getAllOrderNos = async (req, res) => {
   let result = await orderService.getAllOrderNos(req.body.searchQuery);
   res.status(result.status).send(result.data);
 };
+
+
 //#endregion
