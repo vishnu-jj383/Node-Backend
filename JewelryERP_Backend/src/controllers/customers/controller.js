@@ -117,7 +117,7 @@ module.exports.getAllCustomers = async () => {
 
   if (customers.length === 0) {
     return {
-      status: statusCodes.NOTFOUND,
+      status: statusCodes.NOCONTENT,
       data: {
         message: "No customers found!",
         data: [],

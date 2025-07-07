@@ -255,6 +255,7 @@ module.exports.updateSketchStatusToCad = async (id) => {
   await sketch.save();
   const order = await Order.findByPk(sketch.orderId);
   order.orderStatus = "cad";
+  order.statusDate = new Date();
   await order.save();
   await Cad.create({
     orderId: sketch.orderId,

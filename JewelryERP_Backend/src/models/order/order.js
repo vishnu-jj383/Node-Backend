@@ -34,6 +34,9 @@ const Order = sequelize.define("Order", {
   orderDate: {
     type: DataTypes.DATE,
   },
+ statusDate: {
+    type: DataTypes.DATE,
+  },
   requiredDesignCount: {
     type: DataTypes.INTEGER,
     allowNull: true,

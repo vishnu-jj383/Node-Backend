@@ -43,7 +43,11 @@ const Occasion = require("../../models/misc/occasion");
 const Role = require("../../models/auth/roles");
 const Design = require("../../models/design/design");
 //#endregion
-
+const StatusCodes = {
+  SUCCESS: 200,
+  BAD_REQUEST: 400,
+  INTERNAL_SERVER_ERROR: 500,
+};
 //#region modules
 module.exports.uploadImage = async (req) => {
   if (!req.body.cadId) {
@@ -703,7 +707,7 @@ module.exports.updateCadStatusToRender = async (id) => {
 
   cad.cadStatus = "render";
   await cad.save();
-  await Order.update({ orderStatus: "render" }, { where: { id: cad.orderId } });
+  await Order.update({ orderStatus: "render",statusDate : new Date() }, { where: { id: cad.orderId } });
   await Sketch.update(
     { sketchStatus: "render" },
     { where: { id: cad.orderId } }
@@ -903,52 +907,136 @@ module.exports.updateCad = async (req) => {
   };
 };
 
+// module.exports.addCad = async (req) => {
+//   const transaction = await sequelize.transaction();
+//   const { orderId, empIds } = req.body;
+
+//   // Create the sketch
+//   const newCad = await Cad.create(
+//     {
+//       orderId: orderId || null,
+//     },
+//     { transaction }
+//   );
+
+//   // Find the last taskId to generate the next one
+//   const lastTask = await Task.findOne({
+//     order: [["id", "DESC"]],
+//     attributes: ["taskId"],
+//   });
+
+//   let newIdNumber = 100; // Default starting value if no tasks exist
+
+//   if (lastTask && lastTask.taskId) {
+//     const match = lastTask.taskId.match(/\d+/); // Extract numbers from TSKxxx
+//     const lastIdNumber = match ? parseInt(match[0], 10) : 99;
+//     newIdNumber = lastIdNumber + 1;
+//   }
+
+//   // Create task records with generated taskIds
+//   const tasks = empIds.map((empId, index) => ({
+//     taskId: `TSK${newIdNumber + index}`, // Ensure unique taskIds for each record
+//     orderId: newCad.orderId,
+//     cadId: newCad.id,
+//     empId,
+//     type: "cad",
+//   }));
+
+//   await Task.bulkCreate(tasks, { transaction });
+
+//   await transaction.commit();
+
+//   return {
+//     status: statusCodes.SUCCESS,
+//     data: {
+//       message: "Sketch and tasks created successfully",
+//       data: newCad,
+//     },
+//   }; 
+// };
 module.exports.addCad = async (req) => {
   const transaction = await sequelize.transaction();
-  const { orderId, empIds } = req.body;
+  try {
+    const { orderId, empIds } = req.body;
 
-  // Create the sketch
-  const newCad = await Cad.create(
-    {
-      orderId: orderId || null,
-    },
-    { transaction }
-  );
+    // Validate input
+    if (!orderId || !empIds || !Array.isArray(empIds) || empIds.length === 0) {
+      await transaction.rollback();
+      return {
+        status: statusCodes.BAD_REQUEST,
+        data: {
+          message: "Invalid input: Order ID and a non-empty array of employee IDs are required.",
+        },
+      };
+    }
 
-  // Find the last taskId to generate the next one
-  const lastTask = await Task.findOne({
-    order: [["id", "DESC"]],
-    attributes: ["taskId"],
-  });
+    // Check if a CAD record already exists for the given orderId
+    const existingCad = await Cad.findOne({
+      where: { orderId },
+      transaction,
+    });
 
-  let newIdNumber = 100; // Default starting value if no tasks exist
+    if (existingCad) {
+      await transaction.rollback();
+      return {
+        status: StatusCodes.BAD_REQUEST,
+        data: {
+          message: `A CAD record Already Exists for this Order No. Please use a different Order No or update the existing record.`,
+        },
+      };
+    }
 
-  if (lastTask && lastTask.taskId) {
-    const match = lastTask.taskId.match(/\d+/); // Extract numbers from TSKxxx
-    const lastIdNumber = match ? parseInt(match[0], 10) : 99;
-    newIdNumber = lastIdNumber + 1;
+    // Create the sketch
+    const newCad = await Cad.create(
+      {
+        orderId: orderId || null,
+      },
+      { transaction }
+    );
+
+    // Find the last taskId to generate the next one
+    const lastTask = await Task.findOne({
+      order: [["id", "DESC"]],
+      attributes: ["taskId"],
+    });
+
+    let newIdNumber = 100; // Default starting value if no tasks exist
+
+    if (lastTask && lastTask.taskId) {
+      const match = lastTask.taskId.match(/\d+/); // Extract numbers from TSKxxx
+      const lastIdNumber = match ? parseInt(match[0], 10) : 99;
+      newIdNumber = lastIdNumber + 1;
+    }
+
+    // Create task records with generated taskIds
+    const tasks = empIds.map((empId, index) => ({
+      taskId: `TSK${newIdNumber + index}`, // Ensure unique taskIds for each record
+      orderId: newCad.orderId,
+      cadId: newCad.id,
+      empId,
+      type: "cad",
+    }));
+
+    await Task.bulkCreate(tasks, { transaction });
+
+    await transaction.commit();
+
+    return {
+      status: StatusCodes.SUCCESS,
+      data: {
+        message: `CAD record and ${tasks.length} task(s) created successfully for Order ID ${orderId}.`,
+        data: newCad,
+      },
+    };
+  } catch (error) {
+    await transaction.rollback();
+    return {
+      status: StatusCodes.INTERNAL_SERVER_ERROR,
+      data: {
+        message: "Unable to create CAD record and tasks due to a server error. Please try again later.",
+      },
+    };
   }
-
-  // Create task records with generated taskIds
-  const tasks = empIds.map((empId, index) => ({
-    taskId: `TSK${newIdNumber + index}`, // Ensure unique taskIds for each record
-    orderId: newCad.orderId,
-    cadId: newCad.id,
-    empId,
-    type: "cad",
-  }));
-
-  await Task.bulkCreate(tasks, { transaction });
-
-  await transaction.commit();
-
-  return {
-    status: statusCodes.SUCCESS,
-    data: {
-      message: "Sketch and tasks created successfully",
-      data: newCad,
-    },
-  };
 };
   
 module.exports.searchCads = async (filters) => {

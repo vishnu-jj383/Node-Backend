@@ -90,7 +90,7 @@ const unexpectedErrorHandler = (error) => {
 process.on("uncaughtException", unexpectedErrorHandler);
 process.on("unhandledRejection", unexpectedErrorHandler);
 
-process.on("SIGINT", async () => {
+process.on("SIGINT", async () => { 
   console.log("\n🔄 Closing Sequelize connection due to SIGINT...");
   try {
     await sequelize.close();

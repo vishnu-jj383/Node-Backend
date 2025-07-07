@@ -16,6 +16,7 @@ const Cad = require("../../models/cad/cad");
 const Render = require("../../models/render/render");
 const Order = require("../../models/order/order");
 const Customer = require("../../models/customer/customer");
+const Design = require("../../models/design/design")
 const moment = require("moment-timezone");
 //#endregion
 
@@ -389,185 +390,759 @@ module.exports.deleteImages = async (req) => {
   };
 };
 
+
+
+// module.exports.workInProgress = async (req) => {
+//   const { page = 1, pageSize = 10 } = req.body;
+//   const offset = (page - 1) * pageSize;
+
+//   const { count, rows: tasks } = await Task.findAndCountAll({
+//     attributes: ["taskId", "startDate", "endDate"],
+//     include: [
+//       {
+//         model: Order,
+//         attributes: ["orderNo", "orderStatus", "customerId"],
+//         include: [
+//           {
+//             model: Customer,
+//             attributes: ["customer_first_name"],
+//           },
+//         ],
+//       },
+//       {
+//         model: User,
+//         attributes: ["name"],
+//       },
+//     ],
+//     limit: parseInt(pageSize),
+//     offset: parseInt(offset),
+//   });
+
+//   return {
+//     status: statusCodes.SUCCESS,
+//     data: {
+//       message: "Work in progress tasks retrieved successfully",
+//       totalRecords: count,
+//       currentPage: parseInt(page),
+//       totalPages: Math.ceil(count / pageSize),
+//       data: tasks.map((task) => {
+//         const startDate = task.startDate ? new Date(task.startDate) : null;
+//         const endDate = task.endDate ? new Date(task.endDate) : null;
+
+//         // Calculate difference in days between startDate and endDate
+//         const noOfDays =
+//           startDate && endDate
+//             ? Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24))
+//             : null;
+
+//         return {
+//           taskNo: task.taskId,
+//           orderNo: task.Order?.orderNo || "",
+//           orderStatus: task.Order?.orderStatus || "",
+//           customerName: task.Order?.Customer?.customer_first_name || "",
+//           startDate: startDate
+//             ? startDate.toLocaleDateString("en-GB", {
+//                 day: "2-digit",
+//                 month: "short",
+//                 year: "numeric",
+//               })
+//             : "",
+//           endDate: endDate
+//             ? endDate.toLocaleDateString("en-GB", {
+//                 day: "2-digit",
+//                 month: "short",
+//                 year: "numeric",
+//               })
+//             : "",
+//           noOfDays: noOfDays !== null ? `${noOfDays} days` : "",
+//           designer: task.User?.name || "",
+//         };
+//       }),
+//     },
+//   };
+// };
+
+
+// module.exports.workInProgress = async (req) => {
+//   try {
+//     // Validate and sanitize pagination parameters
+//     let page = parseInt(req.body.page) || 1;
+//     let pageSize = parseInt(req.body.pageSize) || 10;
+
+//     // Ensure positive values
+//     page = page > 0 ? page : 1;
+//     pageSize = pageSize > 0 ? pageSize : 10;
+
+//     // Cap pageSize to prevent excessive data fetching
+//     pageSize = Math.min(pageSize, 100);
+
+//     const offset = (page - 1) * pageSize;
+
+//     const { count, rows: orders } = await Order.findAndCountAll({
+//       attributes: ["orderNo", "orderStatus", "customerId", "statusDate", "orderDate", "promiseDate"],
+//       where: {
+//         orderStatus: {
+//           [Op.in]: ["order", "sketch", "cad", "render", "design"], // Filter for work-in-progress statuses
+//         },
+//       },
+//       include: [
+//         {
+//           model: Customer,
+//           attributes: ["customer_first_name"],
+//           required: false,
+//         },
+//         {
+//           model: Task,
+//           attributes: ["taskId", "createdAt"], // Added createdAt for sorting
+//           include: [
+//             {
+//               model: User,
+//               attributes: ["name"],
+//               required: false,
+//             },
+//           ],
+//           required: false,
+//         },
+//         {
+//           model: Sketch,
+//           attributes: ["sketchBriefDate", "sketchCompletedDate"],
+//           required: false,
+//         },
+//         {
+//           model: Cad,
+//           attributes: ["cadBriefDate", "cadCompletedDate"],
+//           required: false,
+//         },
+//         {
+//           model: Render,
+//           attributes: ["renderBriefDate", "renderCompletedDate"],
+//           required: false,
+//         },
+//         {
+//           model: Design,
+//           attributes: ["createdAt"],
+//           required: false,
+//         },
+//       ],
+//       limit: pageSize,
+//       offset: offset,
+//       distinct: true, // Ensure unique order counts
+//     });
+
+//     return {
+//       status: statusCodes.SUCCESS,
+//       data: {
+//         message: "Work in progress orders retrieved successfully",
+//         totalRecords: count,
+//         currentPage: page,
+//         totalPages: Math.ceil(count / pageSize),
+//         data: orders.map((order) => {
+//           const statusDate = order.statusDate ? new Date(order.statusDate) : null;
+//           const currentDate = new Date();
+
+//           // Calculate difference in days between status date and current date
+//           const noOfDays =
+//             statusDate
+//               ? Math.floor((currentDate - statusDate) / (1000 * 60 * 60 * 24))
+//               : null;
+
+//           // Determine start and end dates based on orderStatus
+//           let startDate = "";
+//           let endDate = "";
+
+//           switch (order.orderStatus) {
+//             case "order":
+//               startDate = order.orderDate
+//                 ? new Date(order.orderDate).toLocaleDateString("en-GB", {
+//                     day: "2-digit",
+//                     month: "short",
+//                     year: "numeric",
+//                   })
+//                 : "";
+//               endDate = order.promiseDate
+//                 ? new Date(order.promiseDate).toLocaleDateString("en-GB", {
+//                     day: "2-digit",
+//                     month: "short",
+//                     year: "numeric",
+//                   })
+//                 : "";
+//               break;
+//             case "sketch":
+//               startDate = order.Sketch?.sketchBriefDate
+//               console.log(order.Sketch?.sketchBriefDate)
+//                 ? new Date(order.Sketch.sketchBriefDate).toLocaleDateString("en-GB", {
+//                     day: "2-digit",
+//                     month: "short",
+//                     year: "numeric",
+//                   })
+//                 : "";
+//               endDate = order.Sketch?.sketchCompletedDate
+//                 ? new Date(order.Sketch.sketchCompletedDate).toLocaleDateString("en-GB", {
+//                     day: "2-digit",
+//                     month: "short",
+//                     year: "numeric",
+//                   })
+//                 : "";
+//               break;
+//             case "cad":
+//               startDate = order.Cad?.cadBriefDate
+//                 ? new Date(order.Cad.cadBriefDate).toLocaleDateString("en-GB", {
+//                     day: "2-digit",
+//                     month: "short",
+//                     year: "numeric",
+//                   })
+//                 : "";
+//               endDate = order.Cad?.cadCompletedDate
+//                 ? new Date(order.Cad.cadCompletedDate).toLocaleDateString("en-GB", {
+//                     day: "2-digit",
+//                     month: "short",
+//                     year: "numeric",
+//                   })
+//                 : "";
+//               break;
+//             case "render":
+//               startDate = order.Render?.renderBriefDate
+//                 ? new Date(order.Render.renderBriefDate).toLocaleDateString("en-GB", {
+//                     day: "2-digit",
+//                     month: "short",
+//                     year: "numeric",
+//                   })
+//                 : "";
+//               endDate = order.Render?.renderCompletedDate
+//                 ? new Date(order.Render.renderCompletedDate).toLocaleDateString("en-GB", {
+//                     day: "2-digit",
+//                     month: "short",
+//                     year: "numeric",
+//                   })
+//                 : "";
+//               break;
+//             case "design":
+//               startDate = order.Design?.createdAt
+//                 ? new Date(order.Design.createdAt).toLocaleDateString("en-GB", {
+//                     day: "2-digit",
+//                     month: "short",
+//                     year: "numeric",
+//                   })
+//                 : "";
+//               endDate = "";
+//               break;
+//             default:
+//               startDate = "";
+//               endDate = "";
+//           }
+
+//           // Select the latest designer based on the most recent task
+//           const latestDesigner = (order.Tasks || [])
+//             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]?.User?.name || "";
+
+//           return {
+//             taskNo: order.Tasks?.[0]?.taskId || "",
+//             orderNo: order.orderNo || "",
+//             orderStatus: order.orderStatus || "",
+//             customerName: order.Customer?.customer_first_name || "",
+//             startDate,
+//             endDate,
+//             noOfDays: noOfDays !== null ? `${noOfDays} days` : "",
+//             designer: latestDesigner,
+//           };
+//         }),
+//       },
+//     };
+//   } catch (error) {
+//     return {
+//       status: statusCodes.INTERNAL_SERVER_ERROR,
+//       data: {
+//         message: "Failed to retrieve work in progress orders",
+//         error: error.message,
+//       },
+//     };
+//   }
+// };
 module.exports.workInProgress = async (req) => {
-  const { page = 1, pageSize = 10 } = req.body;
-  const offset = (page - 1) * pageSize;
+  try {
+    // Validate and sanitize pagination parameters
+    let page = parseInt(req.body.page) || 1;
+    let pageSize = parseInt(req.body.pageSize) || 10;
 
-  const { count, rows: tasks } = await Task.findAndCountAll({
-    attributes: ["taskId", "startDate", "endDate"],
-    include: [
-      {
-        model: Order,
-        attributes: ["orderNo", "orderStatus", "customerId"],
-        include: [
-          {
-            model: Customer,
-            attributes: ["customer_first_name"],
+    // Ensure positive values
+    page = page > 0 ? page : 1;
+    pageSize = pageSize > 0 ? pageSize : 10;
+
+    // Cap pageSize to prevent excessive data fetching
+    pageSize = Math.min(pageSize, 100);
+
+    const offset = (page - 1) * pageSize;
+
+    const { count, rows: orders } = await Order.findAndCountAll({
+      attributes: ["id", "orderNo", "orderStatus", "customerId", "statusDate", "orderDate", "promiseDate"],
+      where: {
+        orderStatus: {
+          [Op.in]: ["order", "sketch", "cad", "render", "design"], // Filter for work-in-progress statuses
+        },
+      },
+      include: [
+        {
+          model: Customer,
+          attributes: ["customer_first_name"],
+          required: false,
+        },
+        {
+          model: Task,
+          attributes: ["taskId", "createdAt"],
+          include: [
+            {
+              model: User,
+              attributes: ["name"],
+              required: false,
+            },
+          ],
+          required: false,
+        },
+        {
+          model: Sketch,
+          attributes: ["sketchBriefDate", "sketchCompletedDate"],
+          required: false,
+          where: {
+            orderId: { [Op.col]: "Order.id" }, // Use orderId instead of orderNo
           },
-        ],
-      },
-      {
-        model: User,
-        attributes: ["name"],
-      },
-    ],
-    limit: parseInt(pageSize),
-    offset: parseInt(offset),
-  });
-
-  return {
-    status: statusCodes.SUCCESS,
-    data: {
-      message: "Work in progress tasks retrieved successfully",
-      totalRecords: count,
-      currentPage: parseInt(page),
-      totalPages: Math.ceil(count / pageSize),
-      data: tasks.map((task) => {
-        const startDate = task.startDate ? new Date(task.startDate) : null;
-        const endDate = task.endDate ? new Date(task.endDate) : null;
-
-        // Calculate difference in days between startDate and endDate
-        const noOfDays =
-          startDate && endDate
-            ? Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24))
-            : null;
-
-        return {
-          taskNo: task.taskId,
-          orderNo: task.Order?.orderNo || "",
-          orderStatus: task.Order?.orderStatus || "",
-          customerName: task.Order?.Customer?.customer_first_name || "",
-          startDate: startDate
-            ? startDate.toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
-            : "",
-          endDate: endDate
-            ? endDate.toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
-            : "",
-          noOfDays: noOfDays !== null ? `${noOfDays} days` : "",
-          designer: task.User?.name || "",
-        };
-      }),
-    },
-  };
-};
-
-module.exports.searchWorkInProgress = async (req) => {
-  const { orderStatus, customerName, startDate, endDate, designer, taskNo } =
-    req.body;
-
-  const whereClause = {};
-
-  if (taskNo) {
-    whereClause.taskId = { [Op.like]: `%${taskNo}%` };
-  }
-
-  const orderWhereClause = {};
-  if (orderStatus) {
-    orderWhereClause.orderStatus = { [Op.eq]: orderStatus }; // FIXED: ENUM issue
-  }
-
-  const customerWhereClause = {};
-  if (customerName) {
-    customerWhereClause.customer_first_name = {
-      [Op.like]: `%${customerName}%`,
-    };
-  }
-
-  const userWhereClause = {};
-  if (designer) {
-    userWhereClause.name = { [Op.like]: `%${designer}%` };
-  }
-
-  if (startDate && endDate) {
-    whereClause.startDate = {
-      [Op.between]: [
-        new Date(`${startDate}T00:00:00.000Z`),
-        new Date(`${endDate}T23:59:59.999Z`),
+        },
+        {
+          model: Cad,
+          attributes: ["cadBriefDate", "cadCompletedDate"],
+          required: false,
+          where: {
+            orderId: { [Op.col]: "Order.id" }, // Use orderId instead of orderNo
+          },
+        },
+        {
+          model: Render,
+          attributes: ["renderBriefDate", "renderCompletedDate"],
+          required: false,
+          where: {
+            orderId: { [Op.col]: "Order.id" }, // Use orderId instead of orderNo
+          },
+        },
+        {
+          model: Design,
+          attributes: ["createdAt"],
+          required: false,
+          where: {
+            orderId: { [Op.col]: "Order.id" }, // Use orderId instead of orderNo
+          },
+        },
       ],
-    };
-  } else if (startDate) {
-    whereClause.startDate = {
-      [Op.gte]: new Date(`${startDate}T00:00:00.000Z`),
-    };
-  } else if (endDate) {
-    whereClause.startDate = { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) };
-  }
+      limit: pageSize,
+      offset: offset,
+      distinct: true, // Ensure unique order counts
+    });
 
-  const tasks = await Task.findAll({
-    attributes: ["taskId", "startDate", "endDate"],
-    where: whereClause,
-    include: [
-      {
-        model: Order,
-        attributes: ["orderNo", "orderStatus", "customerId"],
-        where: orderWhereClause,
-        include: [
-          {
-            model: Customer,
-            attributes: ["customer_first_name"],
-            where: customerWhereClause,
-          },
-        ],
-      },
-      {
-        model: User,
-        attributes: ["name"],
-        where: userWhereClause,
-      },
-    ],
-    order: [["startDate", "DESC"]],
-  });
+    return {
+      status: statusCodes.SUCCESS,
+      data: {
+        message: "Work in progress orders retrieved successfully",
+        totalRecords: count,
+        currentPage: page,
+        totalPages: Math.ceil(count / pageSize),
+        data: orders.map((order) => {
+          const statusDate = order.statusDate ? new Date(order.statusDate) : null;
+          const currentDate = new Date();
 
-  return {
-    status: statusCodes.SUCCESS,
-    data: {
-      message: "Filtered work in progress tasks retrieved successfully",
-      totalRecords: tasks.length,
-      data: tasks.map((task) => {
-        const startDate = task.startDate ? new Date(task.startDate) : null;
-        const endDate = task.endDate ? new Date(task.endDate) : null;
-
-        const noOfDays =
-          startDate && endDate
-            ? Math.max(
-                0,
-                Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24))
-              )
+          // Calculate difference in days between status date and current date
+          const noOfDays = statusDate
+            ? Math.floor((currentDate - statusDate) / (1000 * 60 * 60 * 24))
             : null;
 
-        return {
-          taskNo: task.taskId,
-          orderNo: task.Order?.orderNo || "",
-          orderStatus: task.Order?.orderStatus || "",
-          customerName: task.Order?.Customer?.customer_first_name || "",
-          startDate: startDate
-            ? startDate.toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
-            : "",
-          endDate: endDate
-            ? endDate.toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
-            : "",
-          noOfDays: noOfDays !== null ? `${noOfDays} days` : "",
-          designer: task.User?.name || "",
-        };
-      }),
-    },
-  };
+          // Determine start and end dates based on orderStatus
+          let startDate = "";
+          let endDate = "";
+
+          switch (order.orderStatus) {
+            case "order":
+              startDate = order.orderDate
+                ? new Date(order.orderDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              endDate = order.promiseDate
+                ? new Date(order.promiseDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              break;
+            case "sketch":
+              startDate = order.Sketch?.sketchBriefDate
+                ? new Date(order.Sketch.sketchBriefDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : null
+                
+              endDate = order.Sketch?.sketchCompletedDate
+                ? new Date(order.Sketch.sketchCompletedDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              break;
+            case "cad":
+              startDate = order.Cad?.cadBriefDate
+                ? new Date(order.Cad.cadBriefDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : null
+               
+              endDate = order.Cad?.cadCompletedDate
+                ? new Date(order.Cad.cadCompletedDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              break;
+            case "render":
+              startDate = order.Render?.renderBriefDate
+                ? new Date(order.Render.renderBriefDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : null
+                
+              endDate = order.Render?.renderCompletedDate
+                ? new Date(order.Render.renderCompletedDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              break;
+            case "design":
+              startDate = order.Design?.createdAt
+                ? new Date(order.Design.createdAt).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : order.statusDate
+                ? new Date(order.statusDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              endDate = "";
+              break;
+            default:
+              startDate = "";
+              endDate = "";
+          }
+
+          // Select the latest designer based on the Otoha the most recent task
+          const latestDesigner = (order.Tasks || [])
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]?.User?.name || "";
+
+          return {
+            taskNo: order.Tasks?.[0]?.taskId || "",
+            orderNo: order.orderNo || "",
+            orderStatus: order.orderStatus || "",
+            customerName: order.Customer?.customer_first_name || "",
+            startDate,
+            endDate,
+            noOfDays: noOfDays !== null ? `${noOfDays} days` : "",
+            designer: latestDesigner,
+          };
+        }),
+      },
+    };
+  } catch (error) {
+    return {
+      status: statusCodes.INTERNAL_SERVER_ERROR,
+      data: {
+        message: "Failed to retrieve work in progress orders",
+        error: error.message,
+      },
+    };
+  }
+};
+module.exports.searchWorkInProgress = async (req) => {
+  try {
+    const { orderStatus, customerName, startDate, endDate, designer, orderNo } = req.body;
+
+    // Build where clauses
+    const orderWhereClause = {
+      orderStatus: {
+        [Op.in]: ["order", "sketch", "cad", "render", "design"], // Filter for work-in-progress statuses
+      },
+    };
+    if (orderStatus) {
+      orderWhereClause.orderStatus = { [Op.eq]: orderStatus };
+    }
+    if (orderNo) {
+      orderWhereClause.orderNo = { [Op.iLike]: `%${orderNo}%` }; // Case-insensitive search
+    }
+
+    const customerWhereClause = {};
+    if (customerName) {
+      customerWhereClause.customer_first_name = { [Op.iLike]: `%${customerName}%` }; // Case-insensitive search
+    }
+
+    const userWhereClause = {};
+    if (designer) {
+      userWhereClause.name = { [Op.iLike]: `%${designer}%` }; // Case-insensitive search
+    }
+
+    // Build date filter based on the appropriate model's date fields
+    const dateWhereClause = {};
+    if (startDate && endDate) {
+      dateWhereClause[Op.or] = [
+        {
+          orderStatus: "order",
+          orderDate: {
+            [Op.between]: [
+              new Date(`${startDate}T00:00:00.000Z`),
+              new Date(`${endDate}T23:59:59.999Z`),
+            ],
+          },
+        },
+        {
+          orderStatus: "sketch",
+          "$Sketch.sketchBriefDate$": {
+            [Op.between]: [
+              new Date(`${startDate}T00:00:00.000Z`),
+              new Date(`${endDate}T23:59:59.999Z`),
+            ],
+          },
+        },
+        {
+          orderStatus: "cad",
+          "$Cad.cadBriefDate$": {
+            [Op.between]: [
+              new Date(`${startDate}T00:00:00.000Z`),
+              new Date(`${endDate}T23:59:59.999Z`),
+            ],
+          },
+        },
+        {
+          orderStatus: "render",
+          "$Render.renderBriefDate$": {
+            [Op.between]: [
+              new Date(`${startDate}T00:00:00.000Z`),
+              new Date(`${endDate}T23:59:59.999Z`),
+            ],
+          },
+        },
+        {
+          orderStatus: "design",
+          "$Design.createdAt$": {
+            [Op.between]: [
+              new Date(`${startDate}T00:00:00.000Z`),
+              new Date(`${endDate}T23:59:59.999Z`),
+            ],
+          },
+        },
+      ];
+    } else if (startDate) {
+      dateWhereClause[Op.or] = [
+        { orderStatus: "order", orderDate: { [Op.gte]: new Date(`${startDate}T00:00:00.000Z`) } },
+        { orderStatus: "sketch", "$Sketch.sketchBriefDate$": { [Op.gte]: new Date(`${startDate}T00:00:00.000Z`) } },
+        { orderStatus: "cad", "$Cad.cadBriefDate$": { [Op.gte]: new Date(`${startDate}T00:00:00.000Z`) } },
+        { orderStatus: "render", "$Render.renderBriefDate$": { [Op.gte]: new Date(`${startDate}T00:00:00.000Z`) } },
+        { orderStatus: "design", "$Design.createdAt$": { [Op.gte]: new Date(`${startDate}T00:00:00.000Z`) } },
+      ];
+    } else if (endDate) {
+      dateWhereClause[Op.or] = [
+        { orderStatus: "order", orderDate: { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) } },
+        { orderStatus: "sketch", "$Sketch.sketchBriefDate$": { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) } },
+        { orderStatus: "cad", "$Cad.cadBriefDate$": { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) } },
+        { orderStatus: "render", "$Render.renderBriefDate$": { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) } },
+        { orderStatus: "design", "$Design.createdAt$": { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) } },
+      ];
+    }
+
+    // Query orders with all filters
+    const { count, rows: orders } = await Order.findAndCountAll({
+      attributes: ["orderNo", "orderStatus", "customerId", "statusDate", "orderDate", "promiseDate"],
+      where: { ...orderWhereClause, ...dateWhereClause },
+      include: [
+        {
+          model: Customer,
+          attributes: ["customer_first_name"],
+          where: customerWhereClause,
+          required: customerName ? true : false,
+        },
+        {
+          model: Task,
+          attributes: ["taskId"],
+          include: [
+            {
+              model: User,
+              attributes: ["name"],
+              where: userWhereClause,
+              required: designer ? true : false,
+            },
+          ],
+          required: designer ? true : false,
+        },
+        {
+          model: Sketch,
+          attributes: ["sketchBriefDate", "sketchCompletedDate"],
+          required: false,
+        },
+        {
+          model: Cad,
+          attributes: ["cadBriefDate", "cadCompletedDate"],
+          required: false,
+        },
+        {
+          model: Render,
+          attributes: ["renderBriefDate", "renderCompletedDate"],
+          required: false,
+        },
+        {
+          model: Design,
+          attributes: ["createdAt"],
+          required: false,
+        },
+      ],
+      order: [["statusDate", "DESC"]],
+      distinct: true, // Ensure unique order counts
+    });
+
+    return {
+      status: statusCodes.SUCCESS,
+      data: {
+        message: "Filtered work in progress orders retrieved successfully",
+        totalRecords: count,
+        data: orders.map((order) => {
+          const statusDate = order.statusDate ? new Date(order.statusDate) : null;
+          const currentDate = new Date();
+
+          // Calculate difference in days between status date and current date
+          const noOfDays =
+            statusDate
+              ? Math.floor((currentDate - statusDate) / (1000 * 60 * 60 * 24))
+              : null;
+
+          // Determine start and end dates based on orderStatus
+          let startDate = "";
+          let endDate = "";
+
+          switch (order.orderStatus) {
+            case "order":
+              startDate = order.orderDate
+                ? new Date(order.orderDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              endDate = order.promiseDate
+                ? new Date(order.promiseDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              break;
+            case "sketch":
+              startDate = order.Sketch?.sketchBriefDate
+                ? new Date(order.Sketch.sketchBriefDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              endDate = order.Sketch?.sketchCompletedDate
+                ? new Date(order.Sketch.sketchCompletedDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              break;
+            case "cad":
+              startDate = order.Cad?.cadBriefDate
+                ? new Date(order.Cad.cadBriefDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              endDate = order.Cad?.cadCompletedDate
+                ? new Date(order.Cad.cadCompletedDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              break;
+            case "render":
+              startDate = order.Render?.renderBriefBriefDate
+                ? new Date(order.Render.renderBriefDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              endDate = order.Render?.renderCompletedDate
+                ? new Date(order.Render.renderCompletedDate).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              break;
+            case "design":
+              startDate = order.Design?.createdAt
+                ? new Date(order.Design.createdAt).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "";
+              endDate = "";
+              break;
+            default:
+              startDate = "";
+              endDate = "";
+          }
+
+          // Collect all designer names from tasks
+          const designerNames = (order.Tasks || [])
+            .map((task) => task.User?.name)
+            .filter((name) => name)
+            .join(", ") || "";
+
+          return {
+            taskNo: order.Tasks?.[0]?.taskId || "",
+            orderNo: order.orderNo || "",
+            orderStatus: order.orderStatus || "",
+            customerName: order.Customer?.customer_first_name || "",
+            startDate,
+            endDate,
+            noOfDays: noOfDays !== null ? `${noOfDays} days` : "",
+            designer: designerNames,
+          };
+        }),
+      },
+    };
+  } catch (error) {
+    return {
+      status: statusCodes.INTERNAL_SERVER_ERROR,
+      data: {
+        message: "Failed to retrieve filtered work in progress orders",
+        error: error.message,
+      },
+    };
+  }
 };
 
 module.exports.getTaskImagesByType = async (req) => {

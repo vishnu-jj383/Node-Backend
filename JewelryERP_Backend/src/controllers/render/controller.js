@@ -634,7 +634,7 @@ module.exports.updateRenderStatusToDesign = async (id) => {
 
   // Update related entities
   await Order.update(
-    { orderStatus: "design" },
+    { orderStatus: "design",statusDate : new Date() },
     { where: { id: render.orderId } }
   );
   await Sketch.update(

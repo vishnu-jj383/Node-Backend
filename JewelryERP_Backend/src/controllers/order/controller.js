@@ -33,17 +33,41 @@ const validator = require('validator'); // Add validator
 
 
 module.exports.createOrder = async (orderData) => {
-  // Attempt to create the order
-  const order = await Order.create(orderData);
+  try {
+    // Validate orderData
+    if (!orderData) {
+      return {
+        status: statusCodes.BAD_REQUEST,
+        data: { message: "Order data is required" },
+      };
+    }
 
-  // Return success response if order creation is successful
-  return {
-    status: statusCodes.SUCCESS,
-    data: {
-      message: "Order created successfully",
-      data: order,
-    },
-  };
+    // Add statusDate to orderData
+    const orderWithStatusDate = {
+      ...orderData,
+      statusDate: new Date(),
+    };
+
+    // Attempt to create the order
+    const order = await Order.create(orderWithStatusDate);
+
+    // Return success response if order creation is successful
+    return {
+      status: statusCodes.SUCCESS,
+      data: {
+        message: "Order created successfully",
+        data: order,
+      },
+    };
+  } catch (error) {
+    return {
+      status: statusCodes.INTERNAL_SERVER_ERROR,
+      data: {
+        message: "Failed to create order",
+        error: error.message,
+      },
+    };
+  }
 };
 
 module.exports.updateOrderStatus = async (data) => {
@@ -92,6 +116,7 @@ module.exports.updateOrderStatusToSketch = async (orderId) => {
   }
 
   order.orderStatus = "sketch";
+  order.statusDate = new Date();
   await order.save();
 
   const newSketch = await Sketch.create({ orderId });
@@ -119,6 +144,10 @@ module.exports.getAllOrders = async (page = 1, pageSize = 10) => {
       [
         Sequelize.fn("to_char", Sequelize.col("orderDate"), "DD Mon YYYY"),
         "orderDate",
+      ],
+       [
+        Sequelize.fn("to_char", Sequelize.col("statusDate"), "DD Mon YYYY"),
+        "statusDate",
       ],
       [
         Sequelize.fn("to_char", Sequelize.col("promiseDate"), "DD Mon YYYY"),

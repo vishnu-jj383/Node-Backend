@@ -120,6 +120,8 @@ module.exports.getAllMaterialTypes = async () => {
 module.exports.addShapes = async (req) => {
   let shapes = req.body;
 
+  console.log("Input shapes:", JSON.stringify(shapes, null, 2));
+
   if (!shapes || (Array.isArray(shapes) && shapes.length === 0)) {
     return {
       status: statusCodes.NOTACCEPTABLE,
@@ -131,38 +133,60 @@ module.exports.addShapes = async (req) => {
     shapes = [shapes];
   }
 
-  // Validate material_type_id against MaterialType
-  const materialTypeIds = shapes
-    .map((s) => s.material_type_id)
-    .filter((id) => id !== null && id !== undefined); // Exclude null/undefined
-  let validMaterialTypeIds = new Set();
-  if (materialTypeIds.length > 0) {
-    const validMaterialTypes = await MaterialType.findAll({
-      where: { id: { [Op.in]: materialTypeIds } },
-      attributes: ["id"],
-      raw: true,
-    });
-    validMaterialTypeIds = new Set(validMaterialTypes.map((mt) => mt.id));
+  // Map material_class to material_type_id
+  for (let shape of shapes) {
+    if (!shape.material_type_id && shape.material_class) {
+      const materialType = await MaterialType.findOne({
+        where: { material_class: shape.material_class },
+        attributes: ["id", "material_class"],
+        raw: true,
+      });
+      console.log(`MaterialType query for ${shape.material_class}:`, materialType);
+      if (!materialType) {
+        return {
+          status: statusCodes.BADREQUEST,
+          data: { message: `Invalid material_class: ${shape.material_class}` },
+        };
+      }
+      shape.material_type_id = materialType.id;
+    }
+    if (!shape.material_type_id) {
+      return {
+        status: statusCodes.BADREQUEST,
+        data: { message: "material_type_id or material_class is required for all shapes." },
+      };
+    }
   }
 
-  const shapeCodes = shapes.map((s) => s.material_type_id);
+  console.log("Shapes after mapping:", JSON.stringify(shapes, null, 2));
+
+  // Validate material_type_id against MaterialType
+  const materialTypeIds = shapes.map((s) => s.material_type_id);
+  console.log("materialTypeIds:", materialTypeIds);
+  const validMaterialTypes = await MaterialType.findAll({
+    where: { id: { [Op.in]: materialTypeIds } },
+    attributes: ["id"],
+    raw: true,
+  });
+  const validMaterialTypeIds = new Set(validMaterialTypes.map((mt) => mt.id));
+  console.log("validMaterialTypeIds:", [...validMaterialTypeIds]);
+
+  // Check for existing shapes
   const existingRecords = await Shape.findAll({
     where: {
-      material_type_id: { [Op.in]: shapeCodes.filter((id) => id !== null) },
+      material_type_id: { [Op.in]: materialTypeIds },
     },
+    raw: true,
   });
   const existingShapeCodes = new Set(existingRecords.map((r) => r.material_type_id));
+  console.log("existingShapeCodes:", [...existingShapeCodes]);
 
-  const newShapes = shapes.filter((s) => {
-    // Allow null material_type_id if intended, otherwise validate
-    if (s.material_type_id === null || s.material_type_id === undefined) {
-      return !existingShapeCodes.has(null); // Handle null case if needed
-    }
-    return (
-      validMaterialTypeIds.has(s.material_type_id) &&
-      !existingShapeCodes.has(s.material_type_id)
-    );
-  });
+  // Filter new shapes
+  const newShapes = shapes.filter((s) =>
+    validMaterialTypeIds.has(s.material_type_id) &&
+    !existingShapeCodes.has(s.material_type_id)
+  );
+  console.log("newShapes:", JSON.stringify(newShapes, null, 2));
 
   if (newShapes.length === 0) {
     return {
@@ -173,6 +197,7 @@ module.exports.addShapes = async (req) => {
     };
   }
 
+  // Insert new shapes
   const insertedData = await Shape.bulkCreate(newShapes, {
     validate: true,
     ignoreDuplicates: true,
